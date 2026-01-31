@@ -1,4 +1,4 @@
-import { Request, NextFunction } from 'express';
+import { Request, Response, NextFunction } from 'express';
 import { verifyJwt, JwtPayload } from '../shared/jwt';
 import { AuthRepository } from '../repositories/auth.repository';
 import { AuthError } from '../shared/errors';
@@ -13,54 +13,56 @@ export interface AuthenticatedRequest extends Request {
 
 const authRepo = new AuthRepository();
 
-export async function requireAuth(req: AuthenticatedRequest, next: NextFunction) {
+export const requireAuth = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    const authReq = req as AuthenticatedRequest;
     const token = req.cookies?.auth;
 
     if (!token) {
-        throw new AuthError('No authentication token provided');
+        return next(new AuthError('No authentication token provided'));
     }
 
-    const payload: JwtPayload = verifyJwt(token);
-    const cacheKey = `session:${payload.sessionId}`;
-    const cached = await redisCache.get(cacheKey);
+    try {
+        const payload: JwtPayload = verifyJwt(token);
 
-    if (cached) {
-        req.user = {
+        const cacheKey = `session:${payload.sessionId}`;
+        const cached = await redisCache.get(cacheKey);
+
+        if (cached) {
+            authReq.user = {
+                userId: payload.userId,
+                sessionId: payload.sessionId,
+            };
+            return next();
+        }
+
+        const session = await authRepo.findSessionById(payload.sessionId);
+
+        if (!session) {
+            throw new AuthError('Session invalid or revoked');
+        }
+
+        if (new Date(session.expires_at) < new Date()) {
+            await authRepo.deleteSession(payload.sessionId);
+            throw new AuthError('Session expired');
+        }
+
+        const ttl = Math.max(
+            0,
+            Math.floor((new Date(session.expires_at).getTime() - Date.now()) / 1000)
+        );
+
+        if (ttl > 0) {
+            await redisCache.set(cacheKey, '1', { ex: ttl });
+        }
+
+        authReq.user = {
             userId: payload.userId,
             sessionId: payload.sessionId,
         };
-        return next();
+
+        next();
+    } catch (err) {
+        res.clearCookie('auth');
+        next(err);
     }
-
-    let session;
-    try {
-        session = await authRepo.findSessionById(payload.sessionId);
-    } catch {
-        throw new AuthError('Authentication service unavailable');
-    }
-
-    if (!session) {
-        throw new AuthError('Session invalid or revoked');
-    }
-
-    if (new Date(session.expires_at) < new Date()) {
-        await authRepo.deleteSession(payload.sessionId);
-        throw new AuthError('Session expired');
-    }
-
-    const ttl = Math.max(
-        0,
-        Math.floor((new Date(session.expires_at).getTime() - Date.now()) / 1000)
-    );
-
-    if (ttl > 0) {
-        await redisCache.set(cacheKey, '1', { ex: ttl });
-    }
-
-    req.user = {
-        userId: payload.userId,
-        sessionId: payload.sessionId,
-    };
-
-    next();
-}
+};

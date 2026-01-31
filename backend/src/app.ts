@@ -24,7 +24,7 @@ export function createApp() {
 
     app.use(express.json());
     app.use(cookieParser());
-    app.use(helmet());
+    app.use(helmet({ contentSecurityPolicy: false }));
 
     registerRoutes(app);
 
