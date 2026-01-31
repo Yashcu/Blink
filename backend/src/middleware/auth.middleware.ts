@@ -1,4 +1,4 @@
-import { Request, Response, NextFunction } from 'express';
+import { Request, NextFunction } from 'express';
 import { verifyJwt, JwtPayload } from '../shared/jwt';
 import { AuthRepository } from '../repositories/auth.repository';
 import { AuthError } from '../shared/errors';
