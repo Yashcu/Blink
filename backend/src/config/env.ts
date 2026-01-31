@@ -1,44 +1,45 @@
 import dotenv from 'dotenv';
+import { cleanEnv, str, num, url, makeValidator } from 'envalid';
+
 dotenv.config();
 
-function required(key: string): string {
-    const value = process.env[key];
-    if (!value) {
-        throw new Error(`❌ [CONFIG] Missing required env var: ${key}`);
-    }
-    return value;
-}
+const strMinLength = (minLength: number) =>
+    makeValidator((x) => {
+        if (!x || x.length < minLength) {
+            throw new Error(`Expected string length >= ${minLength}`);
+        }
+        return x;
+    });
 
-export const env = {
-    PORT: Number(process.env.PORT || 3000),
-    NODE_ENV: process.env.NODE_ENV || 'development',
+export const env = cleanEnv(process.env, {
+    NODE_ENV: str({ choices: ['development', 'test', 'production'], default: 'development' }),
+    PORT: num({ default: 3000 }),
 
-    // Database & Redis
-    DATABASE_URL: required('DATABASE_URL'),
-    REDIS_URL: process.env.REDIS_URL || 'redis://127.0.0.1:6379',
+    // Infrastructure
+    DATABASE_URL: url(),
+    DB_CA_PEM: str({ default: undefined }),
+    REDIS_URL: url(),
 
     // Security
-    JWT_SECRET: required('JWT_SECRET'),
-    JWT_EXPIRES_IN_SECONDS: Number(process.env.JWT_EXPIRES_IN_SECONDS || 3600),
-    SESSION_EXPIRES_IN_SECONDS: Number(process.env.SESSION_EXPIRES_IN_SECONDS || 86400),
+    // Enforce 16 char minimum, even in dev, to build good habits
+    JWT_SECRET: strMinLength(16)(),
+    JWT_EXPIRES_IN_SECONDS: num({ default: 3600 }),
+    SESSION_EXPIRES_IN_SECONDS: num({ default: 86400 }),
 
     // CORS & Cookies
-    COOKIE_DOMAIN: process.env.COOKIE_DOMAIN,
-    CORS_ORIGIN: process.env.CORS_ORIGIN || 'http://localhost:5173',
-};
+    COOKIE_DOMAIN: str({ default: undefined }),
+    CORS_ORIGIN: str({ default: 'http://localhost:5173' }),
+
+    // Extra
+    IP_HASH_SALT: str({ default: 'changeme-in-production' }),
+});
 
 // --- Production Guardrails ---
-if (env.NODE_ENV === 'production') {
-    // 1. Prevent local Redis in production (Prevents silent analytics loss)
+if (env.isProduction) {
     if (env.REDIS_URL.includes('127.0.0.1') || env.REDIS_URL.includes('localhost')) {
         throw new Error(
             '❌ [FATAL] Production environment detected with local Redis URL. ' +
             'This effectively disables analytics persistence. Set a real REDIS_URL.'
         );
-    }
-
-    // 2. Prevent weak secrets
-    if (env.JWT_SECRET.length < 16) {
-        throw new Error('❌ [FATAL] JWT_SECRET is too short for production. Must be at least 16 characters.');
     }
 }

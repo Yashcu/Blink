@@ -1,20 +1,32 @@
 import { redisClient } from '../infra/redis.client';
 import { isRedisCircuitOpen } from '../shared/circuit-breaker';
+import { logger } from '../shared/logger';
 
 export interface RateLimitResult {
     success: boolean;
     retryAfter?: number;
 }
 
+export interface RateLimitOptions {
+    failOpen?: boolean;
+}
+
 export const rateLimiter = {
-    /**
-     * Checks if an IP has exceeded the rate limit.
-     * Returns success status and time to retry if failed.
-     */
-    async check(ip: string, limit: number, windowSeconds: number): Promise<RateLimitResult> {
-        // 1. Circuit Breaker: If Redis is down, fail open (allow traffic)
+    async check(
+        ip: string,
+        limit: number,
+        windowSeconds: number,
+        options: RateLimitOptions = { failOpen: false }
+    ): Promise<RateLimitResult> {
+        const { failOpen } = options;
+
         if (isRedisCircuitOpen()) {
-            return { success: true };
+            if (failOpen) {
+                logger.warn({ ip }, 'Rate Limit skipped (Circuit Open)');
+                return { success: true };
+            }
+            logger.error({ ip }, 'Rate Limit blocked (Circuit Open - Fail Closed)');
+            return { success: false, retryAfter: 60 };
         }
 
         const key = `rate:${ip}`;
@@ -27,7 +39,6 @@ export const rateLimiter = {
             }
 
             if (requests > limit) {
-                // Fetch valid TTL to tell user when to retry
                 const ttl = await redisClient.ttl(key);
                 return {
                     success: false,
@@ -37,8 +48,13 @@ export const rateLimiter = {
 
             return { success: true };
         } catch (error) {
-            // Redis failure -> Fail Open
-            return { success: true };
+            logger.error({ err: error, ip }, 'Rate Limit Redis Failure');
+
+            if (failOpen) {
+                return { success: true };
+            }
+
+            return { success: false, retryAfter: 60 };
         }
     },
 };

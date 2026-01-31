@@ -3,6 +3,7 @@ import { verifyJwt, JwtPayload } from '../shared/jwt';
 import { AuthRepository } from '../repositories/auth.repository';
 import { AuthError } from '../shared/errors';
 import { redisCache } from '../infra/redis.cache';
+import { LRUCache } from 'lru-cache';
 
 export interface AuthenticatedRequest extends Request {
     user?: {
@@ -12,6 +13,11 @@ export interface AuthenticatedRequest extends Request {
 }
 
 const authRepo = new AuthRepository();
+
+const sessionL1Cache = new LRUCache<string, boolean>({
+    max: 5000,
+    ttl: 1000 * 60,
+});
 
 export const requireAuth = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     const authReq = req as AuthenticatedRequest;
@@ -24,10 +30,15 @@ export const requireAuth = async (req: Request, res: Response, next: NextFunctio
     try {
         const payload: JwtPayload = verifyJwt(token);
 
-        const cacheKey = `session:${payload.sessionId}`;
-        const cached = await redisCache.get(cacheKey);
+        const sessionKey = `session:${payload.sessionId}`;
+        if (sessionL1Cache.get(sessionKey)) {
+            authReq.user = { userId: payload.userId, sessionId: payload.sessionId };
+            return next();
+        }
 
+        const cached = await redisCache.get(sessionKey);
         if (cached) {
+            sessionL1Cache.set(sessionKey, true);
             authReq.user = {
                 userId: payload.userId,
                 sessionId: payload.sessionId,
@@ -36,7 +47,6 @@ export const requireAuth = async (req: Request, res: Response, next: NextFunctio
         }
 
         const session = await authRepo.findSessionById(payload.sessionId);
-
         if (!session) {
             throw new AuthError('Session invalid or revoked');
         }
@@ -52,8 +62,10 @@ export const requireAuth = async (req: Request, res: Response, next: NextFunctio
         );
 
         if (ttl > 0) {
-            await redisCache.set(cacheKey, '1', { ex: ttl });
+            await redisCache.set(sessionKey, '1', { ex: ttl });
         }
+
+        sessionL1Cache.set(sessionKey, true);
 
         authReq.user = {
             userId: payload.userId,
@@ -63,6 +75,10 @@ export const requireAuth = async (req: Request, res: Response, next: NextFunctio
         next();
     } catch (err) {
         res.clearCookie('auth');
-        next(err);
+        if (err instanceof Error && err.name === 'TokenExpiredError') {
+            next(new AuthError('Token expired'));
+        } else {
+            next(err);
+        }
     }
 };
