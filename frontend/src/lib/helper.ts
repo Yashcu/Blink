@@ -1,7 +1,7 @@
 import { BACKEND_URL } from "../config/env";
 
 export function buildShortUrl(url: any) {
-    return `${BACKEND_URL}/api/${(url.customAlias || url.shortCode).trim()}`;
+    return `${BACKEND_URL}/${(url.customAlias || url.shortCode).trim()}`;
 }
 
 export function formatDate(iso: string) {
