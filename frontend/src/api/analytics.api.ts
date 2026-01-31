@@ -3,7 +3,7 @@ import { apiFetch } from "@/api/client";
 export type AnalyticsResponse = {
     totalClicks: number;
     lastAccessed: string | null;
-    countries: { code: string; count: number }[];
+    countries: { country: string; count: number }[];
     devices: Record<string, number>;
     osStats: { os: string; count: number }[];
     browserStats: { browser: string; count: number }[];
