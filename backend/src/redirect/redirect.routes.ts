@@ -1,61 +1,73 @@
-import { Express, Request, Response } from 'express';
-import { RedirectService } from './redirect.service';
-import { checkRateLimit } from '../rate-limit/rate-limiter';
+import { Router, Request, Response } from 'express';
+import { UrlService } from '../url/url.service';
 import { emitAnalyticsEvent } from '../analytics/analytics.producer';
-import { redirectLatency, redirectErrors } from '../metrics/metrics';
+import { rateLimiter } from '../rate-limit/rate-limiter';
+import { redirectLatency, redirectErrors, maliciousUrlAttempts } from '../metrics/metrics';
+import { isUrlBlacklisted } from '../shared/blacklist';
 
-const service = new RedirectService();
+const router = Router();
+const urlService = new UrlService();
 
-export function registerRedirectRoutes(app: Express) {
-    app.get('/api/:code', async (req: Request, res: Response) => {
-        const end = redirectLatency.startTimer();
-        const code = ((req.params.code as string) || '').trim();
-        const ip = (req.headers['x-forwarded-for'] as string)?.split(',')[0] || req.ip || 'unknown';
+router.get('/:code', async (req: Request, res: Response): Promise<void> => {
+    const endTimer = redirectLatency.startTimer();
 
-        if (code.length > 32) {
-            return res.status(404).send('Not found');
+    const code = req.params.code as string;
+    const rawIp = req.headers['x-forwarded-for'];
+    const ip = Array.isArray(rawIp) ? rawIp[0] : (rawIp || req.socket.remoteAddress || 'unknown');
+    const userAgent = req.headers['user-agent'] || 'unknown';
+
+    const rawReferer = req.headers['referer'];
+    const referer = Array.isArray(rawReferer) ? rawReferer[0] : (rawReferer || null);
+
+    try {
+        // 1. Transparent Rate Limiting
+        // Limit: 100 requests per 10 minutes (600s)
+        const limitCheck = await rateLimiter.check(ip, 100, 600);
+
+        if (!limitCheck.success) {
+            res.set('Retry-After', String(limitCheck.retryAfter));
+            res.status(429).send(`Too Many Requests. Please try again in ${limitCheck.retryAfter} seconds.`);
+            endTimer({ result: 'rate_limited' });
+            return;
         }
 
-        try {
-            // Rate limiting (FAIL‑OPEN)
-            try {
-                const allowed = await checkRateLimit(`ratelimit:redirect:${ip}`, 1000, 60);
-
-                if (!allowed) {
-                    end({ result: 'rate_limited' });
-                    return res.status(429).send('Too many requests');
-                }
-            } catch {
-                // fail‑open
-            }
-
-            const longUrl = await service.resolve(code);
-
-            if (!longUrl) {
-                end({ result: 'not_found' });
-                return res.status(404).send('Not found');
-            }
-
-            end({ result: 'success' });
-
-            // Fire‑and‑forget analytics (FAIL‑OPEN)
-            try {
-                void emitAnalyticsEvent({
-                    shortCode: code,
-                    timestamp: Date.now(),
-                    ip,
-                    userAgent: req.headers['user-agent'] || null,
-                    referer: req.headers['referer'] || null,
-                });
-            } catch {
-                // never block redirect
-            }
-
-            return res.redirect(302, longUrl);
-        } catch {
-            redirectErrors.inc();
-            end({ result: 'error' });
-            return res.status(500).send('Internal error');
+        // 2. Validate Short Code Format
+        if (!/^[a-zA-Z0-9_-]+$/.test(code)) {
+            res.status(400).send('Invalid Code Format');
+            endTimer({ result: 'bad_request' });
+            return;
         }
-    });
-}
+
+        // 3. Lookup URL (Cache -> DB)
+        const longUrl = await urlService.resolve(code);
+
+        if (!longUrl) {
+            res.status(404).sendFile('404.html', { root: 'public' }); // Assuming you have a 404 page, or just send text
+            endTimer({ result: 'not_found' });
+            return;
+        }
+
+        // 4. Security Check (Blacklist)
+        if (await isUrlBlacklisted(longUrl)) {
+            maliciousUrlAttempts.inc();
+            res.status(403).send('Link blocked for safety.');
+            endTimer({ result: 'blocked' });
+            return;
+        }
+
+        emitAnalyticsEvent({ shortCode: code, ip, userAgent, referer, timestamp: Date.now() })
+            .catch(err => console.error('Analytics Error:', err));
+
+        // 6. Perform Redirect
+        res.redirect(longUrl);
+        endTimer({ result: 'success' });
+
+    } catch (error) {
+        console.error('Redirect Error:', error);
+        redirectErrors.inc();
+        res.status(500).send('Internal Server Error');
+        endTimer({ result: 'error' });
+    }
+});
+
+export { router as redirectRouter };

@@ -26,4 +26,20 @@ export const redirectErrors = new client.Counter({
     help: 'Redirect errors',
 });
 
+export const activeUsers = new client.Gauge({
+    name: 'business_active_users_1h',
+    help: 'Number of unique users creating links in the last hour',
+});
+
+export const maliciousUrlAttempts = new client.Counter({
+    name: 'business_malicious_url_attempts_total',
+    help: 'Number of times users tried to shorten a blacklisted URL',
+});
+
+export const queueLatency = new client.Histogram({
+    name: 'business_analytics_queue_latency_seconds',
+    help: 'Time from click event to DB insertion',
+    buckets: [1, 5, 10, 30, 60],
+});
+
 export const registry = client.register;

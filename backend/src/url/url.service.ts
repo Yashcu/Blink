@@ -3,13 +3,52 @@ import { UrlRepository } from '../repositories/url.repository';
 import { validateUrl } from '../shared/url.validator';
 import { generateShortCode } from '../shared/short-code';
 import { redisCache } from '../infra/redis.cache';
+import { eventBus, EVENTS } from '../shared/event-bus'; // 👈 Import EventBus
 
 export class UrlService {
     private repo = new UrlRepository();
 
+    // --- READ PATH (Keeps Cache-Aside for performance) ---
+    async resolve(code: string): Promise<string | null> {
+        // 1. Check Cache
+        const cached = await redisCache.get(`short:${code}`);
+        if (cached) {
+            try {
+                const data = JSON.parse(cached);
+                return data.longUrl;
+            } catch { /* ignore */ }
+        }
+
+        // 2. Check DB
+        const url = await this.repo.findByShortCode(code);
+        if (!url) return null;
+
+        // 3. Warm Cache (Self-healing read)
+        await redisCache.set(`short:${code}`, { longUrl: url.longUrl }, { ex: 86400 });
+
+        return url.longUrl;
+    }
+
+    async getUrlByCode(code: string, userId: string) {
+        const url = await this.repo.findOwnedByCode(code, userId);
+        if (!url) return null;
+        return {
+            shortCode: url.shortCode,
+            longUrl: url.longUrl,
+            customAlias: url.customAlias,
+            createdAt: url.createdAt,
+            expiresAt: url.expiresAt,
+        };
+    }
+
+    async getUserUrls(userId: string) {
+        return this.repo.getUrlsByUserId(userId);
+    }
+
+    // --- WRITE PATHS (Decoupled Side Effects) ---
+
     async createUrl(params: { longUrl: string; userId: string; customAlias?: string }) {
         const url = validateUrl(params.longUrl);
-
         let shortCode = params.customAlias || this.generateCode();
         let retries = 0;
 
@@ -25,7 +64,6 @@ export class UrlService {
                 });
                 break;
             } catch (err: any) {
-                // Postgres error 23505 is unique_violation
                 if (err.code === '23505' && !params.customAlias) {
                     shortCode = this.generateCode();
                     retries++;
@@ -35,20 +73,14 @@ export class UrlService {
             }
         }
 
-        if (retries >= 3) {
-            throw new Error('Failed to generate unique code');
-        }
+        if (retries >= 3) throw new Error('Failed to generate unique code');
 
-        // 🔥 CACHE WARMING
-        try {
-            await redisCache.set(`short:${shortCode}`, { longUrl: url.toString() }, { ex: 86400 });
-
-            if (params.customAlias) {
-                await redisCache.set(`alias:${params.customAlias}`, { shortCode }, { ex: 86400 });
-            }
-        } catch {
-            // intentionally ignored
-        }
+        // 🚀 EMIT EVENT: Cache warming happens in the background now
+        eventBus.emit(EVENTS.URL.CREATED, {
+            shortCode,
+            longUrl: url.toString(),
+            customAlias: params.customAlias
+        });
 
         return {
             shortCode,
@@ -57,49 +89,15 @@ export class UrlService {
         };
     }
 
-    private generateCode(): string {
-        return generateShortCode(7).trim();
-    }
-
-    async getUserUrls(userId: string) {
-        return this.repo.getUrlsByUserId(userId);
-    }
-
-    async getUrlByCode(code: string, userId: string) {
-        const url = await this.repo.findOwnedByCode(code, userId);
-
-        if (!url) {
-            return null;
-        }
-
-        return {
-            shortCode: url.shortCode,
-            longUrl: url.longUrl,
-            customAlias: url.customAlias,
-            createdAt: url.createdAt,
-            expiresAt: url.expiresAt,
-        };
-    }
-
-    async updateUrl(
-        code: string,
-        userId: string,
-        params: {
-            longUrl?: string;
-            expiresAt?: Date | null;
-        },
-    ) {
+    async updateUrl(code: string, userId: string, params: { longUrl?: string; expiresAt?: Date | null }) {
         const url = await this.repo.findOwnedByCode(code, userId);
         if (!url) return null;
 
-        if (url.expiresAt && url.expiresAt <= new Date()) {
-            throw new Error('Cannot update expired URL');
-        }
+        if (url.expiresAt && url.expiresAt <= new Date()) throw new Error('Cannot update expired URL');
 
         let nextLongUrl: string | undefined;
         if (params.longUrl !== undefined) {
-            const validated = validateUrl(params.longUrl);
-            nextLongUrl = validated.toString();
+            nextLongUrl = validateUrl(params.longUrl).toString();
         }
 
         await this.repo.updateUrlById(url.id, {
@@ -107,14 +105,11 @@ export class UrlService {
             expiresAt: params.expiresAt !== undefined ? params.expiresAt : (url.expiresAt ?? null),
         });
 
-        try {
-            await redisCache.del(`short:${url.shortCode}`);
-            if (url.customAlias) {
-                await redisCache.del(`alias:${url.customAlias}`);
-            }
-        } catch {
-            // intentionally ignored
-        }
+        // 🚀 EMIT EVENT: Cache invalidation happens in background
+        eventBus.emit(EVENTS.URL.UPDATED, {
+            shortCode: url.shortCode,
+            customAlias: url.customAlias
+        });
 
         return {
             shortCode: url.shortCode,
@@ -128,19 +123,18 @@ export class UrlService {
         const url = await this.repo.findOwnedByCode(code, userId);
         if (!url) return false;
 
-        // Delete DB record
         await this.repo.deleteById(url.id);
 
-        // Invalidate cache
-        try {
-            await redisCache.del(`short:${url.shortCode}`);
-            if (url.customAlias) {
-                await redisCache.del(`alias:${url.customAlias}`);
-            }
-        } catch {
-            // intentionally ignored
-        }
+        // 🚀 EMIT EVENT
+        eventBus.emit(EVENTS.URL.DELETED, {
+            shortCode: url.shortCode,
+            customAlias: url.customAlias
+        });
 
         return true;
+    }
+
+    private generateCode(): string {
+        return generateShortCode(7).trim();
     }
 }

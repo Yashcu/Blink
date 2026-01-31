@@ -5,6 +5,7 @@ import { pool } from './infra/database';
 import { redisClient } from './infra/redis.client';
 import { closeAnalyticsWorker } from './analytics/analytics.worker';
 import './analytics/queue.monitor';
+import './url/url.listeners';
 
 const app = createApp();
 const port = Number(env.PORT);
@@ -36,7 +37,7 @@ async function shutdown(signal: string) {
         });
 
         // 2. Close analytics worker with generous timeout
-        await closeAnalyticsWorker(15000);
+        await closeAnalyticsWorker();
 
         // 3. Close Redis (best effort)
         try {
