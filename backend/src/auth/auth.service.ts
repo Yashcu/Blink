@@ -5,6 +5,7 @@ import { signJwt } from '../shared/jwt';
 import { authConfig } from '../config/auth';
 import { AuthError, ConflictError, ValidationError } from '../shared/errors';
 import { AUTH_CONSTRAINTS } from '../shared/constraints';
+import { redisCache } from '../infra/redis.cache';
 
 export class AuthService {
     private repo = new AuthRepository();
@@ -63,12 +64,10 @@ export class AuthService {
             throw new AuthError('Authentication service unavailable');
         }
 
-        if (!user) {
-            throw new AuthError('INVALID_CREDENTIALS');
-        }
+        const storedHash = user ? user.password_hash : '$argon2id$v=19$m=65536,t=3,p=1$DummyHashToWasteTimeButNotTooLong====================';
+        const valid = await verifyPassword(password, storedHash);
 
-        const valid = await verifyPassword(password, user.password_hash);
-        if (!valid) {
+        if (!user || !valid) {
             throw new AuthError('INVALID_CREDENTIALS');
         }
 
@@ -90,5 +89,10 @@ export class AuthService {
 
     async logout(sessionId: string) {
         await this.repo.deleteSession(sessionId);
+        try {
+            await redisCache.del(`session:${sessionId}`);
+        } catch {
+            // The middleware will eventually fail when cache expires or if it falls back to DB.
+        }
     }
 }
