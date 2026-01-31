@@ -1,0 +1,60 @@
+{
+    "name": "backend",
+    "version": "1.0.0",
+    "main": "server.js",
+    "scripts": {
+        "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
+        "worker": "ts-node src/analytics/analytics.worker.ts",
+        "build": "tsc",
+        "lint": "eslint .",
+        "lint:fix": "eslint . --fix",
+        "format": "prettier --write .",
+        "migrate:up": "node-pg-migrate up",
+        "migrate:down": "node-pg-migrate down",
+        "migrate:create": "node-pg-migrate create"
+    },
+    "node-pg-migrate": {
+        "migrations-dir": "migrations",
+        "database-url": "DATABASE_URL"
+    },
+    "keywords": [],
+    "author": "",
+    "license": "MIT",
+    "description": "",
+    "dependencies": {
+        "bcrypt": "^6.0.0",
+        "bullmq": "^5.67.0",
+        "cookie-parser": "^1.4.7",
+        "cors": "^2.8.6",
+        "dotenv": "^17.2.3",
+        "express": "^5.2.1",
+        "geoip-lite": "^1.4.10",
+        "helmet": "^8.1.0",
+        "ioredis": "^5.9.2",
+        "jsonwebtoken": "^9.0.3",
+        "node-pg-migrate": "^8.0.4",
+        "pg": "^8.17.2",
+        "prettier": "^3.8.1",
+        "prom-client": "^15.1.3",
+        "ua-parser-js": "^2.0.8",
+        "uuid": "^9.0.1",
+        "zod": "^4.3.6"
+    },
+    "devDependencies": {
+        "@eslint/js": "^9.39.2",
+        "@types/bcrypt": "^6.0.0",
+        "@types/cookie-parser": "^1.4.10",
+        "@types/cors": "^2.8.19",
+        "@types/express": "^5.0.6",
+        "@types/geoip-lite": "^1.4.4",
+        "@types/jsonwebtoken": "^9.0.10",
+        "@types/node": "^25.0.10",
+        "@types/pg": "^8.16.0",
+        "@types/uuid": "^10.0.0",
+        "eslint": "^9.39.2",
+        "globals": "^17.2.0",
+        "ts-node-dev": "^2.0.0",
+        "typescript": "^5.9.3",
+        "typescript-eslint": "^8.54.0"
+    }
+}
