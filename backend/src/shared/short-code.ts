@@ -1,12 +1,13 @@
-import crypto from 'crypto';
+import { customAlphabet } from "nanoid";
 
 const ALPHABET = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
 
+const nanoid = customAlphabet(ALPHABET, 7);
+
 export function generateShortCode(length = 7): string {
-    let result = '';
-    for (let i = 0; i < length; i++) {
-        const randomIndex = crypto.randomInt(0, ALPHABET.length);
-        result += ALPHABET[randomIndex];
+    if(length === 7){
+        return nanoid();
     }
-    return result;
+
+    return customAlphabet(ALPHABET, length)();
 }

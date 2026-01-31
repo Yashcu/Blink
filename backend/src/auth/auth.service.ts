@@ -1,4 +1,4 @@
-import { v4 as uuidv4 } from 'uuid';
+import { v7 as uuidv7 } from 'uuid';
 import { AuthRepository } from '../repositories/auth.repository';
 import { hashPassword, verifyPassword } from '../shared/password';
 import { signJwt } from '../shared/jwt';
@@ -17,12 +17,13 @@ export class AuthService {
         }
 
         const passwordHash = await hashPassword(password);
-        const userId = uuidv4();
-        const sessionId = uuidv4();
+
+        const userId = uuidv7();
+        const sessionId = uuidv7();
+
         const expiresAt = new Date(Date.now() + authConfig.sessionExpiresInSeconds * 1000);
 
         try {
-            // Must be atomic: user + session created in a single transaction
             await this.repo.createUserAndSession(userId, email, passwordHash, sessionId, expiresAt);
         } catch (err) {
             if (err instanceof ConflictError) {
@@ -71,7 +72,7 @@ export class AuthService {
             throw new AuthError('INVALID_CREDENTIALS');
         }
 
-        const sessionId = uuidv4();
+        const sessionId = uuidv7();
         const expiresAt = new Date(Date.now() + authConfig.sessionExpiresInSeconds * 1000);
 
         try {
