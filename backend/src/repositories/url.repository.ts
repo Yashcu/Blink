@@ -56,8 +56,8 @@ export class UrlRepository {
 
     async findByShortCode(shortCode: string) {
         const result = await pool.query(
-            `SELECT id, short_code, long_url, user_id, custom_alias, expiry_at 
-             FROM urls 
+            `SELECT id, short_code, long_url, user_id, custom_alias, expiry_at
+             FROM urls
              WHERE short_code = $1
              AND (expiry_at IS NULL OR expiry_at > NOW())`,
             [shortCode],

@@ -1,4 +1,4 @@
-import { v4 as uuidv4 } from 'uuid';
+import { v7 as uuidv7 } from 'uuid';
 import { UrlRepository } from '../repositories/url.repository';
 import { validateUrl } from '../shared/url.validator';
 import { generateShortCode } from '../shared/short-code';
@@ -14,7 +14,7 @@ export class UrlService {
         let retries = 0;
 
         while (retries < 3) {
-            const id = uuidv4();
+            const id = uuidv7();
             try {
                 await this.repo.insertUrl({
                     id,
@@ -24,8 +24,7 @@ export class UrlService {
                     customAlias: params.customAlias ?? undefined,
                 });
                 break;
-            } catch (err: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-                // Check for unique constraint violation (code collision)
+            } catch (err: any) {
                 // Postgres error 23505 is unique_violation
                 if (err.code === '23505' && !params.customAlias) {
                     shortCode = this.generateCode();
@@ -40,7 +39,7 @@ export class UrlService {
             throw new Error('Failed to generate unique code');
         }
 
-        // 🔥 CACHE WARMING (WRITE‑TIME ONLY)
+        // 🔥 CACHE WARMING
         try {
             await redisCache.set(`short:${shortCode}`, { longUrl: url.toString() }, { ex: 86400 });
 
@@ -132,7 +131,7 @@ export class UrlService {
         // Delete DB record
         await this.repo.deleteById(url.id);
 
-        // Invalidate cache (both possible keys)
+        // Invalidate cache
         try {
             await redisCache.del(`short:${url.shortCode}`);
             if (url.customAlias) {
