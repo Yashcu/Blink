@@ -1,12 +1,18 @@
 import { redisClient } from './redis.client';
+import { isRedisCircuitOpen, recordRedisFailure, recordRedisSuccess } from '../shared/circuit-breaker';
 
 type CacheValue = string | number | object | Buffer;
 
 export const redisCache = {
     async get(key: string): Promise<string | null> {
+        if(isRedisCircuitOpen()) return null;
+
         try {
-            return await redisClient.get(key);
+            const result = await redisClient.get(key);
+            recordRedisSuccess();
+            return result;
         } catch {
+            recordRedisFailure();
             return null;
         }
     },
@@ -16,6 +22,8 @@ export const redisCache = {
         value: CacheValue,
         options: { ex?: number; nx?: boolean } = {},
     ): Promise<void> {
+        if(isRedisCircuitOpen()) return;
+
         try {
             let valueStr: string;
             if (typeof value === 'object' && value !== null) {
@@ -25,24 +33,23 @@ export const redisCache = {
             }
 
             if (options.ex !== undefined && options.nx === true) {
-                // SET key value EX seconds NX
                 await redisClient.set(key, valueStr, 'EX', options.ex, 'NX');
             } else if (options.ex !== undefined) {
-                // SET key value EX seconds
                 await redisClient.set(key, valueStr, 'EX', options.ex);
             } else if (options.nx === true) {
-                // SET key value NX
                 await redisClient.set(key, valueStr, 'NX');
             } else {
-                // plain SET key value
                 await redisClient.set(key, valueStr);
             }
-        } catch {
-            // silent best-effort
+            recordRedisSuccess();
+        } catch (error) {
+            recordRedisFailure();
         }
     },
 
     async del(key: string | string[]): Promise<void> {
+        if (isRedisCircuitOpen()) return;
+
         try {
             if (Array.isArray(key)) {
                 if (key.length === 0) return;
@@ -50,15 +57,21 @@ export const redisCache = {
             } else {
                 await redisClient.del(key);
             }
-        } catch {
-            // silent
+            recordRedisSuccess();
+        } catch (error) {
+            recordRedisFailure();
         }
     },
 
     async exists(key: string): Promise<boolean> {
+        if (isRedisCircuitOpen()) return false;
+
         try {
-            return (await redisClient.exists(key)) === 1;
-        } catch {
+            const result = await redisClient.exists(key);
+            recordRedisSuccess();
+            return result === 1;
+        } catch (error) {
+            recordRedisFailure();
             return false;
         }
     },
