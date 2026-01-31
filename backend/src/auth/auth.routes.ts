@@ -35,15 +35,10 @@ export function registerAuthRoutes(app: Express) {
         validateBody(loginSchema),
         async (req: Request, res: Response, next: NextFunction) => {
             try {
-                const ip = req.headers['x-forwarded-for']?.toString() || req.ip || '127.0.0.1';
+                const rawIp = req.headers['x-forwarded-for'];
+                const ip = Array.isArray(rawIp) ? rawIp[0] : (rawIp || req.ip || '127.0.0.1');
 
-                const allowed = await checkLoginRateLimit(ip);
-                if (!allowed) {
-                    return res.status(429).json({
-                        success: false,
-                        error: 'Too many login attempts. Try again later.',
-                    });
-                }
+                await checkLoginRateLimit(ip);
 
                 const { email, password } = req.body as z.infer<typeof loginSchema>;
 
@@ -70,7 +65,7 @@ export function registerAuthRoutes(app: Express) {
 
                 res.clearCookie('auth', getCookieOptions())
                     .status(200)
-                    .json({ success: true, message: 'Logged out successfully' });
+                    .json({ success: true });
             } catch (err) {
                 next(err);
             }

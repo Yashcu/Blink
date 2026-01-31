@@ -6,6 +6,7 @@ import { redisClient } from './infra/redis.client';
 import { closeAnalyticsWorker } from './analytics/analytics.worker';
 import './analytics/queue.monitor';
 import './url/url.listeners';
+import { logger } from './shared/logger';
 
 const app = createApp();
 const port = Number(env.PORT);
@@ -13,7 +14,7 @@ const port = Number(env.PORT);
 const server = http.createServer(app);
 
 server.listen(port, () => {
-    console.log(`🚀 Server running on port ${port}`);
+    logger.info(`🚀 Server running on port ${port}`);
 });
 
 let shuttingDown = false;
@@ -22,44 +23,45 @@ async function shutdown(signal: string) {
     if (shuttingDown) return;
     shuttingDown = true;
 
-    console.log(`🛑 ${signal} received. Shutting down...`);
+    logger.info({ signal }, '🛑 Shutdown signal received. Starting graceful teardown...');
 
-    const FORCE_EXIT_TIMEOUT = 30000; // 30 seconds max
+    const FORCE_EXIT_TIMEOUT = 30000;
     const forceExit = setTimeout(() => {
-        console.error('❌ Shutdown timeout exceeded – forcing exit');
+        logger.fatal('❌ Shutdown timeout exceeded – forcing exit');
         process.exit(1);
     }, FORCE_EXIT_TIMEOUT);
 
     try {
         // 1. Stop accepting new HTTP requests
         server.close(() => {
-            console.log('→ HTTP server closed (no new connections)');
+            logger.info('→ HTTP server closed');
         });
 
         // 2. Close analytics worker with generous timeout
         await closeAnalyticsWorker();
+        logger.info('→ Analytics worker closed');
 
         // 3. Close Redis (best effort)
         try {
             await redisClient.quit();
-            console.log('→ Redis connection closed');
+            logger.info('→ Redis connection closed');
         } catch (err: any) {
-            console.log('→ Redis quit failed (non-critical):', err.message);
+            logger.warn('→ Redis quit failed (non-critical):', err.message);
         }
 
         // 4. Close PostgreSQL pool
         try {
             await pool.end();
-            console.log('→ PostgreSQL pool ended');
+            logger.info('→ PostgreSQL pool ended');
         } catch (err: any) {
-            console.log('→ PostgreSQL pool close failed:', err.message);
+            logger.error('→ PostgreSQL pool close failed:', err.message);
         }
 
         clearTimeout(forceExit);
-        console.log('✅ Graceful shutdown complete');
+        logger.info('✅ Graceful shutdown complete');
         process.exit(0);
     } catch (err) {
-        console.error('❌ Shutdown error', err);
+        logger.fatal({ err }, '❌ Fatal error during shutdown');
         clearTimeout(forceExit);
         process.exit(1);
     }
@@ -69,10 +71,10 @@ process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
 
 process.on('unhandledRejection', (reason) => {
-    console.error('❌ Unhandled Rejection', reason);
+    logger.fatal({ reason }, '❌ Unhandled Rejection');
 });
 
 process.on('uncaughtException', (error) => {
-    console.error('❌ Uncaught Exception', error);
+    logger.fatal({ err: error }, '❌ Uncaught Exception');
     process.exit(1);
 });

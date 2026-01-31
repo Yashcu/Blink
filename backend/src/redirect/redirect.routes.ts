@@ -1,4 +1,4 @@
-import { Router, Request, Response } from 'express';
+import { Express, Router, Request, Response } from 'express';
 import { UrlService } from '../url/url.service';
 import { emitAnalyticsEvent } from '../analytics/analytics.producer';
 import { rateLimiter } from '../rate-limit/rate-limiter';
@@ -70,4 +70,6 @@ router.get('/:code', async (req: Request, res: Response): Promise<void> => {
     }
 });
 
-export { router as redirectRouter };
+export function registerRedirectRoutes(app: Express){
+    app.use('/', router);
+}

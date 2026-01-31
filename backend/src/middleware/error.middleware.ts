@@ -1,23 +1,29 @@
 import { Request, Response, NextFunction } from 'express';
 import { AppError } from '../shared/errors';
+import { logger } from '../shared/logger';
 
-const isProd = process.env.NODE_ENV === 'production';
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function errorHandler(err: any, req: Request, res: Response, _next: NextFunction) {
     if (err instanceof AppError) {
+        logger.warn({
+            code: err.code,
+            path: req.path,
+            method: req.method,
+            ip: req.ip,
+            message: err.message
+        }, 'Operational Error');
+
         return res.status(err.status).json({
             error: err.message,
             code: err.code,
         });
     }
 
-    console.error('Unhandled error:', {
-        message: err.message,
-        ...(isProd ? {} : { stack: err.stack }),
+    logger.error({
+        err,
         path: req.path,
         method: req.method,
-    });
+        query: req.query,
+    }, 'Unhandled Exception');
 
     return res.status(500).json({
         error: 'Internal server error',

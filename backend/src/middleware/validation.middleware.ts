@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
-import { checkRateLimit } from '../rate-limit/rate-limiter';
+import { rateLimiter } from '../rate-limit/rate-limiter';
 import { errorResponse } from '../shared/response';
 
 export function validateBody<T>(schema: z.ZodType<T>) {
@@ -21,10 +21,9 @@ export function validateBody<T>(schema: z.ZodType<T>) {
 export function rateLimitRegister() {
     return async (req: Request, res: Response, next: NextFunction) => {
         const ip = req.ip || '';
-        const allowed = await checkRateLimit(`ratelimit:register:${ip}`, 4, 3600); // 4/hour
-
-        if (!allowed) {
-            return errorResponse(res, 'Too many registration attempts. Try again later.', 429);
+        const limitResult = await rateLimiter.check(ip, 100, 60);
+        if (!limitResult.success) {
+            return errorResponse(res, `Too many requests. Retry in ${limitResult.retryAfter}s`, 429);
         }
         next();
     };

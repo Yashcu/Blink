@@ -1,30 +1,10 @@
-// auth/login-rate-limit.ts
-import { checkRateLimit, rateLimitSkipped } from '../rate-limit/rate-limiter';
+import { rateLimiter } from '../rate-limit/rate-limiter';
+import { AuthError } from '../shared/errors';
 
-// Config - move to config/ or env if you want to tune per-env
-const LOGIN_RATE_LIMIT = {
-    windowSeconds: Number(process.env.LOGIN_RATE_LIMIT_WINDOW ?? 900),
-    maxAttempts: Number(process.env.LOGIN_RATE_LIMIT_MAX ?? 5),
-};
+export async function checkLoginRateLimit(ip: string) {
+    const result = await rateLimiter.check(ip, 5, 900);
 
-const LIMITER_TYPE = 'login';
-
-/**
- * Rate limit login attempts per IP.
- * Fail-open: always allows if Redis is down.
- */
-export async function checkLoginRateLimit(ip: string): Promise<boolean> {
-    const key = `ratelimit:login:${ip}`;
-
-    return checkRateLimit(
-        key,
-        LOGIN_RATE_LIMIT.maxAttempts,
-        LOGIN_RATE_LIMIT.windowSeconds,
-        LIMITER_TYPE,
-    );
-}
-
-// Optional: if you want a quick way to increment skipped metric manually (rarely needed)
-export function incrementLoginSkippedMetric() {
-    rateLimitSkipped.inc({ limiter_type: LIMITER_TYPE });
+    if (!result.success) {
+        throw new AuthError(`Too many login attempts. Please try again in ${result.retryAfter} seconds.`);
+    }
 }

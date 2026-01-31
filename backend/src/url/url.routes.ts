@@ -2,7 +2,7 @@ import { Express, Response, NextFunction } from 'express';
 import { UrlService } from './url.service';
 import { requireAuth, AuthenticatedRequest } from '../middleware/auth.middleware';
 import { validateBody } from '../middleware/validation.middleware';
-import { checkRateLimit } from '../rate-limit/rate-limiter';
+import { rateLimiter } from '../rate-limit/rate-limiter';
 import { createUrlSchema, updateUrlSchema } from './url.validation';
 
 const service = new UrlService();
@@ -18,15 +18,11 @@ export function registerUrlRoutes(app: Express) {
 
                 const userId = req.user!.userId;
 
-                let allowed;
-                try {
-                    allowed = await checkRateLimit(`ratelimit:create:${userId}`, 10, 60);
-                } catch {
-                    allowed = true;
-                }
-
-                if (!allowed) {
-                    return res.status(429).json({ error: 'Rate limit exceeded' });
+                const ip = req.ip || 'unknown';
+                const limitRes = await rateLimiter.check(ip, 20, 60);
+                if (!limitRes.success) {
+                    res.status(429).json({ message: `Rate limit exceeded. Retry in ${limitRes.retryAfter}s` });
+                    return;
                 }
 
                 const result = await service.createUrl({
@@ -100,8 +96,8 @@ export function registerUrlRoutes(app: Express) {
                     expiresAt === undefined
                         ? undefined
                         : expiresAt === null
-                          ? null
-                          : new Date(expiresAt);
+                            ? null
+                            : new Date(expiresAt);
 
                 if (parsedExpiry && parsedExpiry instanceof Date) {
                     if (isNaN(parsedExpiry.getTime())) {
