@@ -44,7 +44,7 @@ setInterval(async () => {
     try {
         const count = await analyticsQueue.getWaitingCount();
         analyticsQueueDepth.set(count);
-    } catch (_err) {
+    } catch {
         // Silent fail: If Redis is down, we just can't report depth right now.
         // Do NOT crash the process.
     }

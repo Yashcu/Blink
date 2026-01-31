@@ -45,16 +45,16 @@ async function shutdown(signal: string) {
         try {
             await redisClient.quit();
             logger.info('Redis connection closed');
-        } catch (err: any) {
-            logger.warn('Redis quit failed (non-critical):', err.message);
+        } catch (err) {
+            logger.warn({ err }, 'Redis quit failed (non-critical)');
         }
 
         // 4. Close PostgreSQL pool
         try {
             await pool.end();
             logger.info('PostgreSQL pool ended');
-        } catch (err: any) {
-            logger.error('PostgreSQL pool close failed:', err.message);
+        } catch (err) {
+            logger.error({ err }, 'PostgreSQL pool close failed');
         }
 
         clearTimeout(forceExit);
@@ -75,6 +75,6 @@ process.on('unhandledRejection', (reason) => {
 });
 
 process.on('uncaughtException', (error) => {
-    logger.fatal({ err: error }, 'Uncaught Exception');
+    logger.fatal({ error }, 'Uncaught Exception');
     process.exit(1);
 });

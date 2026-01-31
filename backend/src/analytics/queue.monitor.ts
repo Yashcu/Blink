@@ -7,7 +7,7 @@ setInterval(async () => {
         // ✅ NEW: Wrapped in try/catch to prevent crash when Redis is down
         const count = await analyticsQueue.getWaitingCount();
         analyticsQueueDepth.set(count);
-    } catch (_err) {
+    } catch {
         // Silent fail: If Redis is down, we just skip updating metrics.
         // The server stays ALIVE.
     }

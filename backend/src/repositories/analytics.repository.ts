@@ -20,7 +20,7 @@ export class AnalyticsRepository {
 
         const client = await pool.connect();
         try {
-            const values: any[] = [];
+            const values: (string | number | boolean | null)[] = [];
             const placeholders: string[] = [];
 
             events.forEach((ev, index) => {
@@ -78,19 +78,19 @@ export class AnalyticsRepository {
             pool.query('SELECT COUNT(*) FROM analytics WHERE short_code = ANY($1)', [shortCodes]),
             pool.query('SELECT MAX(timestamp) AS last FROM analytics WHERE short_code = ANY($1)', [shortCodes]),
             pool.query(
-                `SELECT country, COUNT(*) FROM analytics WHERE short_code = ANY($1) AND country IS NOT NULL GROUP BY country`,
+                'SELECT country, COUNT(*) FROM analytics WHERE short_code = ANY($1) AND country IS NOT NULL GROUP BY country',
                 [shortCodes],
             ),
             pool.query(
-                `SELECT device_type, COUNT(*) FROM analytics WHERE short_code = ANY($1) AND device_type IS NOT NULL GROUP BY device_type`,
+                'SELECT device_type, COUNT(*) FROM analytics WHERE short_code = ANY($1) AND device_type IS NOT NULL GROUP BY device_type',
                 [shortCodes],
             ),
             pool.query(
-                `SELECT os, COUNT(*) FROM analytics WHERE short_code = ANY($1) AND os IS NOT NULL GROUP BY os`,
+                'SELECT os, COUNT(*) FROM analytics WHERE short_code = ANY($1) AND os IS NOT NULL GROUP BY os',
                 [shortCodes],
             ),
             pool.query(
-                `SELECT browser, COUNT(*) FROM analytics WHERE short_code = ANY($1) AND browser IS NOT NULL GROUP BY browser`,
+                'SELECT browser, COUNT(*) FROM analytics WHERE short_code = ANY($1) AND browser IS NOT NULL GROUP BY browser',
                 [shortCodes],
             ),
             pool.query(

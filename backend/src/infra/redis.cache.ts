@@ -5,7 +5,7 @@ type CacheValue = string | number | object | Buffer;
 
 export const redisCache = {
     async get(key: string): Promise<string | null> {
-        if(isRedisCircuitOpen()) return null;
+        if (isRedisCircuitOpen()) return null;
 
         try {
             const result = await redisClient.get(key);
@@ -22,7 +22,7 @@ export const redisCache = {
         value: CacheValue,
         options: { ex?: number; nx?: boolean } = {},
     ): Promise<void> {
-        if(isRedisCircuitOpen()) return;
+        if (isRedisCircuitOpen()) return;
 
         try {
             let valueStr: string;
@@ -42,7 +42,7 @@ export const redisCache = {
                 await redisClient.set(key, valueStr);
             }
             recordRedisSuccess();
-        } catch (error) {
+        } catch {
             recordRedisFailure();
         }
     },
@@ -58,7 +58,7 @@ export const redisCache = {
                 await redisClient.del(key);
             }
             recordRedisSuccess();
-        } catch (error) {
+        } catch {
             recordRedisFailure();
         }
     },
@@ -70,7 +70,7 @@ export const redisCache = {
             const result = await redisClient.exists(key);
             recordRedisSuccess();
             return result === 1;
-        } catch (error) {
+        } catch {
             recordRedisFailure();
             return false;
         }
