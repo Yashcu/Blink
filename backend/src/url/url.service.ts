@@ -63,8 +63,9 @@ export class UrlService {
                     customAlias: params.customAlias ?? undefined,
                 });
                 break;
-            } catch (err: any) {
-                if (err.code === '23505' && !params.customAlias) {
+            } catch (err) {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                if ((err as any).code === '23505' && !params.customAlias) {
                     shortCode = this.generateCode();
                     retries++;
                     continue;

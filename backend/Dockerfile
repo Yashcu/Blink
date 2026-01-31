@@ -7,7 +7,7 @@ WORKDIR /app
 
 # Install ALL dependencies (including devDeps like typescript)
 COPY package*.json ./
-RUN npm install
+RUN npm ci
 
 # Copy source code
 COPY . .
@@ -27,7 +27,7 @@ ENV NODE_ENV=production
 
 # Install ONLY production dependencies (No Typescript, ESLint, etc.)
 COPY package*.json ./
-RUN npm install --only=production && npm cache clean --force
+RUN npm ci --only=production && npm cache clean --force
 
 # Copy compiled code from builder
 COPY --from=builder /app/dist ./dist

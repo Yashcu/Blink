@@ -3,14 +3,14 @@ export class AppError extends Error {
         public readonly code: string,
         public readonly status: number,
         message?: string,
-        public readonly details?: any,
+        public readonly details?: unknown,
     ) {
         super(message);
     }
 }
 
 export class ValidationError extends AppError {
-    constructor(message: string, details?: any) {
+    constructor(message: string, details?: unknown) {
         super('VALIDATION_ERROR', 400, message, details);
     }
 }

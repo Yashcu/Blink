@@ -53,7 +53,7 @@ export const analyticsWorker = new Worker(
 
             logger.debug({ jobId: job.id, eventId }, 'Analytics event processed');
 
-        } catch (err: any) {
+        } catch (err) {
             analyticsFailed.inc();
             logger.error({ err, jobId: job.id }, 'Analytics job failed');
             throw err;
