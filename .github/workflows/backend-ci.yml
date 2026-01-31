@@ -6,7 +6,7 @@ on:
     paths:
       - 'Shorty/backend/**' # Only trigger if backend changes
   pull_request:
-    branches: [ "main" ]
+    branches: [ "main" ] # Only trigger if backend changes
     paths:
       - 'Shorty/backend/**'
 
