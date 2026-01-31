@@ -1,38 +1,46 @@
 import Redis from 'ioredis';
 
 const redisUrl = process.env.REDIS_URL || 'redis://127.0.0.1:6379';
-const isProduction = process.env.NODE_ENV === 'production';
 
 export const redisClient = new Redis(redisUrl, {
-    lazyConnect: true,
-    connectTimeout: 10000,
-    enableOfflineQueue: false,
     maxRetriesPerRequest: null, // Required for BullMQ
+    enableReadyCheck: false,
+    lazyConnect: true,
     retryStrategy: (times) => {
-        const delay = isProduction
-            ? Math.min(times * 500, 5000) // Cap at 5s
-            : Math.min(times * 100, 3000); // Cap at 3s
+        const delay = Math.min(times * 50, 2000);
         return delay;
+    },
+    reconnectOnError(err) {
+        const targetError = 'READONLY';
+        if (err.message.includes(targetError)) {
+            return true;
+        }
+        return false;
     },
 });
 
-redisClient.on('connect', () => console.log('✅ [REDIS] Connected'));
-redisClient.on('ready', () => console.log('🚀 [REDIS] Ready'));
-redisClient.on('close', () => console.debug('[REDIS] Connection closed'));
-redisClient.on('reconnecting', () => console.debug('[REDIS] Reconnecting...'));
+// -- Event Handlers for Observability --
+
+redisClient.on('connect', () => {
+    console.log('✅ [REDIS] Connection established');
+});
+
+redisClient.on('ready', () => {
+    console.log('🚀 [REDIS] Client ready');
+});
 
 redisClient.on('error', (err) => {
+    // Filter out common "noise" errors during reconnection attempts
     if (
-        err.message.includes('Connection is closed') ||
-        err.message.includes('read ECONNRESET') ||
-        err.message.includes('Connection timed out') ||
-        err.message.includes('connect ECONNREFUSED')
+        err.message.includes('ECONNREFUSED') ||
+        err.message.includes('ECONNRESET')
     ) {
         return;
     }
-    console.error('[REDIS] Connection error:', err.message);
+    console.error('❌ [REDIS] Error:', err.message);
 });
 
+// Initialize connection (fail-safe)
 redisClient.connect().catch((err) => {
-    console.error('[REDIS] Initial connection failed', err.message);
+    console.warn('⚠️ [REDIS] Failed to connect at startup (will retry):', err.message);
 });
