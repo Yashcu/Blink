@@ -1,40 +1,42 @@
+import axios from "axios";
 import { BACKEND_URL } from "@/config/env";
 
-export type ApiError = {
-    status: number;
-    error?: string;
-};
+export const api = axios.create({
+    baseURL: BACKEND_URL,
+    withCredentials: true,
+    headers: {
+        "Content-Type": "application/json",
+    },
+});
 
-export async function apiFetch<T>(
-    path: string,
-    options: RequestInit = {}
-): Promise<T> {
-    const res = await fetch(`${BACKEND_URL}${path}`, {
-        ...options,
-        credentials: "include",
-        headers: {
-            "Content-Type": "application/json",
-            ...(options.headers || {}),
-        },
-    });
-
-    if (!res.ok) {
-        let body: any = {};
-        try {
-            body = await res.json();
-        } catch {
-            // ignore
+api.interceptors.response.use(
+    (response) => response.data,
+    (error) => {
+        if (error.response?.status === 401) {
+            if (
+                !window.location.pathname.startsWith("/login") &&
+                !window.location.pathname.startsWith("/register")
+            ) {
+                window.location.href = "/login";
+            }
         }
 
-        throw {
-            status: res.status,
-            error: body.error,
-        } satisfies ApiError;
-    }
+        const message =
+            error.response?.data?.error ||
+            error.message ||
+            "An unexpected error occurred";
 
-    if (res.status === 204) {
-        return undefined as T;
+        return Promise.reject({ status: error.response?.status, error: message });
     }
+);
 
-    return res.json() as Promise<T>;
-}
+export const apiFetch = async <T>(path: string, options?: any): Promise<T> => {
+    const method = options?.method || "GET";
+    const data = options?.body ? JSON.parse(options.body) : undefined;
+
+    return api.request<any, T>({
+        url: path,
+        method,
+        data,
+    });
+};
