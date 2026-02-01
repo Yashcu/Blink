@@ -1,5 +1,6 @@
 import axios from "axios";
 import { BACKEND_URL } from "@/config/env";
+import { toast } from "sonner";
 
 export const api = axios.create({
     baseURL: BACKEND_URL,
@@ -12,21 +13,24 @@ export const api = axios.create({
 api.interceptors.response.use(
     (response) => response.data,
     (error) => {
-        if (error.response?.status === 401) {
-            if (
-                !window.location.pathname.startsWith("/login") &&
-                !window.location.pathname.startsWith("/register")
-            ) {
+        const status = error.response?.status;
+        const backendError = error.response?.data;
+
+        if (status === 401) {
+            if (!window.location.pathname.startsWith("/login") &&
+                !window.location.pathname.startsWith("/register")) {
                 window.location.href = "/login";
             }
         }
 
-        const message =
-            error.response?.data?.error ||
-            error.message ||
-            "An unexpected error occurred";
+        if (status === 429) {
+            toast.error("Too many requests. Please slow down.");
+        }
 
-        return Promise.reject({ status: error.response?.status, error: message });
+        const message = backendError?.error || error.message || "An unexpected error occurred";
+        const code = backendError?.code || "UNKNOWN_ERROR";
+
+        return Promise.reject({ status, error: message, code });
     }
 );
 

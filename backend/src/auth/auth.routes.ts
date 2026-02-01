@@ -35,12 +35,11 @@ export function registerAuthRoutes(app: Express) {
         validateBody(loginSchema),
         async (req: Request, res: Response, next: NextFunction) => {
             try {
+                const { email, password } = req.body as z.infer<typeof loginSchema>;
                 const rawIp = req.headers['x-forwarded-for'];
                 const ip = Array.isArray(rawIp) ? rawIp[0] : (rawIp || req.ip || '127.0.0.1');
 
-                await checkLoginRateLimit(ip);
-
-                const { email, password } = req.body as z.infer<typeof loginSchema>;
+                await checkLoginRateLimit(ip, email);
 
                 const { token } = await service.login(email, password);
 

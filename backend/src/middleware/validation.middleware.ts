@@ -21,7 +21,7 @@ export function validateBody<T>(schema: z.ZodType<T>) {
 export function rateLimitRegister() {
     return async (req: Request, res: Response, next: NextFunction) => {
         const ip = req.ip || '';
-        const limitResult = await rateLimiter.check(ip, 100, 60);
+        const limitResult = await rateLimiter(ip, 100, 60);
         if (!limitResult.success) {
             return errorResponse(res, `Too many requests. Retry in ${limitResult.retryAfter}s`, 429);
         }
