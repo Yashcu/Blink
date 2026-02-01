@@ -19,7 +19,7 @@ export function registerUrlRoutes(app: Express) {
                 const userId = req.user!.userId;
 
                 const ip = req.ip || 'unknown';
-                const limitRes = await rateLimiter.check(ip, 20, 60);
+                const limitRes = await rateLimiter(ip, 20, 60);
                 if (!limitRes.success) {
                     res.status(429).json({ message: `Rate limit exceeded. Retry in ${limitRes.retryAfter}s` });
                     return;

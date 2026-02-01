@@ -19,11 +19,11 @@ export const useAuthStore = create<AuthState>((set) => ({
     loading: true,
 
     loadUser: async () => {
+        set({ loading: true });
         try {
             const user = await me();
             set({ user, loading: false });
         } catch (err: any) {
-            // 401 or any failure → logged out
             set({ user: null, loading: false });
         }
     },
@@ -33,6 +33,7 @@ export const useAuthStore = create<AuthState>((set) => ({
             await apiLogout();
         } finally {
             set({ user: null });
+            window.location.href = "/login";
         }
     }
 }));

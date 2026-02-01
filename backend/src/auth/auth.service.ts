@@ -3,19 +3,15 @@ import { AuthRepository } from '../repositories/auth.repository';
 import { hashPassword, verifyPassword } from '../shared/password';
 import { signJwt } from '../shared/jwt';
 import { authConfig } from '../config/auth';
-import { AuthError, ConflictError, ValidationError } from '../shared/errors';
-import { AUTH_CONSTRAINTS } from '../shared/constraints';
+import { AuthError } from '../shared/errors';
 import { redisCache } from '../infra/redis.cache';
+import { logger } from '../shared/logger';
 
 export class AuthService {
     private repo = new AuthRepository();
 
     async register(email: string, password: string) {
         email = email.trim().toLowerCase();
-
-        if (!this.isStrongPassword(password)) {
-            throw new ValidationError('Password must be 8-100 characters long');
-        }
 
         const passwordHash = await hashPassword(password);
 
@@ -27,10 +23,8 @@ export class AuthService {
         try {
             await this.repo.createUserAndSession(userId, email, passwordHash, sessionId, expiresAt);
         } catch (err) {
-            if (err instanceof ConflictError) {
-                throw err;
-            }
-            throw new AuthError('Failed to create account');
+            logger.error({ err, email }, 'Registration failed');
+            throw new AuthError('Registration could not be completed at this time.');
         }
 
         const token = signJwt({ userId, sessionId }, { expiresIn: authConfig.jwtExpiresInSeconds });
@@ -38,34 +32,13 @@ export class AuthService {
         return { token };
     }
 
-    private isStrongPassword(password: string): boolean {
-        if (
-            password.length < AUTH_CONSTRAINTS.PASSWORD_MIN_LENGTH ||
-            password.length > AUTH_CONSTRAINTS.PASSWORD_MAX_LENGTH
-        ) {
-            return false;
-        }
-
-        return (
-            /[a-z]/.test(password) &&
-            /[A-Z]/.test(password) &&
-            /[0-9]/.test(password) &&
-            /[^a-zA-Z0-9]/.test(password)
-        );
-    }
-
     async login(email: string, password: string) {
-        email = email.trim().toLowerCase();
+        const user = await this.repo.findUserByEmail(email.trim().toLowerCase());
 
-        let user;
-        try {
-            user = await this.repo.findUserByEmail(email);
-        } catch {
-            throw new AuthError('Authentication service unavailable');
-        }
+        const dummyHash = '$argon2id$v=19$m=65536,t=3,p=1$4S0...';
+        const hashToVerify = user ? user.password_hash : dummyHash;
 
-        const storedHash = user ? user.password_hash : '$argon2id$v=19$m=65536,t=3,p=1$DummyHashToWasteTimeButNotTooLong====================';
-        const valid = await verifyPassword(password, storedHash);
+        const valid = await verifyPassword(password, hashToVerify);
 
         if (!user || !valid) {
             throw new AuthError('INVALID_CREDENTIALS');
@@ -91,8 +64,8 @@ export class AuthService {
         await this.repo.deleteSession(sessionId);
         try {
             await redisCache.del(`session:${sessionId}`);
-        } catch {
-            // The middleware will eventually fail when cache expires or if it falls back to DB.
+        } catch (err) {
+            logger.error({ err, sessionId }, 'Failed to clear session from cache during logout');
         }
     }
 }

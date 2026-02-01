@@ -2,42 +2,67 @@ import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import cookieParser from 'cookie-parser';
+import compression from 'compression';
+import hpp from 'hpp';
+import pinoHttp from 'pino-http';
 import { registerRoutes } from './routes';
 import { errorHandler } from './middleware/error.middleware';
 import { env } from './config/env';
+import { requestIdMiddleware } from './middleware/request-id.middleware';
+import { logger } from './shared/logger';
+import { verifyRequestSource } from './middleware/security.middleware';
+import { rateLimiter } from './rate-limit/rate-limiter';
 
 export function createApp() {
     const app = express();
 
-    app.use(
-        cors({
-            origin: (origin, callback) => {
-                if (!origin) return callback(null, true);
-                const allowed = [env.CORS_ORIGIN];
-                if (allowed.includes(origin)) {
-                    return callback(null, true);
-                }
-                callback(new Error('Not allowed by CORS'));
-            },
-            credentials: true,
-        }),
-    );
+    app.use(requestIdMiddleware);
+    app.use(pinoHttp({
+        logger,
+        genReqId: (req) => req.headers['x-request-id'] as string
+    }));
 
-    app.use(express.json());
-    app.use(cookieParser());
-    app.use(
-        helmet({
-            contentSecurityPolicy: {
-                directives: {
-                    defaultSrc: ['\'self\''],
-                    scriptSrc: ['\'self\'', '\'unsafe-inline\''],
-                    styleSrc: ['\'self\'', '\'unsafe-inline\''],
-                    imgSrc: ['\'self\'', 'data:', 'https:'],
-                    connectSrc: ['\'self\'', env.CORS_ORIGIN],
-                },
+    app.set('trust proxy', 1);
+    app.use(helmet({
+        frameguard: { action: 'deny' },
+        referrerPolicy: { policy: 'same-origin' },
+        contentSecurityPolicy: {
+            directives: {
+                defaultSrc: ["'self'"],
+                scriptSrc: ["'self'"],
+                styleSrc: ["'self'"],
+                imgSrc: ["'self'"],
+                fontSrc: ["'self'"],
+                connectSrc: ["'self'"],
             },
-        })
-    );
+        },
+    }));
+    app.use(compression());
+    app.use(hpp());
+    app.use(cors({
+        origin: (origin, callback) => {
+            if (!origin) return callback(null, true);
+            const allowed = [env.CORS_ORIGIN];
+            if (allowed.includes(origin)) {
+                return callback(null, true);
+            }
+            callback(new Error('Not allowed by CORS'));
+        },
+        credentials: true,
+    }));
+    app.use(express.json({ limit: '10kb' }));
+    app.use(express.urlencoded({ extended: true, limit: '10kb' }));
+    app.use(cookieParser());
+    app.use(verifyRequestSource);
+
+    app.use(async (req, res, next) => {
+        // Global limit: 100 requests per minute per IP
+        const result = await rateLimiter(req.ip || 'unknown', 100, 60);
+        if (!result.success) {
+            return res.status(429).json({ error: 'Global rate limit exceeded. Slow down.' });
+        }
+        next();
+    });
 
     registerRoutes(app);
 
