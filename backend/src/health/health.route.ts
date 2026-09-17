@@ -1,13 +1,13 @@
-import { Express } from "express";
-import { checkPostgres } from "./postgres.health";
-import { checkRedis } from "./redis.health";
-import { checkAnalyticsQueue } from "./queue.health";
-import { isRedisCircuitOpen } from "../shared/circuit-breaker";
+import { Express } from 'express';
+import { checkPostgres } from './postgres.health';
+import { checkRedis } from './redis.health';
+import { checkAnalyticsQueue } from './queue.health';
+import { isRedisCircuitOpen } from '../shared/circuit-breaker';
 
 export function registerHealthRoute(app: Express) {
-    app.get('health/live', (_req, res) => res.status(200).send('alive'));
+    app.get('/health/live', (_req, res) => res.status(200).send('alive'));
 
-    app.get('health/ready', async (_req, res) => {
+    app.get('/health/ready', async (_req, res) => {
         const postgres = await checkPostgres();
         const redisStatus = await checkRedis();
         const queueHealthy = await checkAnalyticsQueue();
@@ -22,5 +22,5 @@ export function registerHealthRoute(app: Express) {
             analyticsQueue: queueHealthy,
             circuitBreaker: circuitOpen ? 'OPEN (Redis issues)' : 'CLOSED (Healthy)',
         });
-    })
+    });
 }
