@@ -34,12 +34,42 @@ export const env = cleanEnv(process.env, {
     IP_HASH_SALT: str({ default: 'changeme-in-production' }),
 });
 
+const INSECURE_JWT_SECRETS = new Set([
+    'super-secret-dev-key',
+    'change-me-to-a-long-random-secret',
+    'your_super_secret_key',
+]);
+
+const INSECURE_SALTS = new Set([
+    'changeme-in-production',
+    'change-me-to-a-random-salt',
+    'salt',
+]);
+
 // --- Production Guardrails ---
 if (env.isProduction) {
     if (env.REDIS_URL.includes('127.0.0.1') || env.REDIS_URL.includes('localhost')) {
         throw new Error(
             '❌ [FATAL] Production environment detected with local Redis URL. ' +
             'This effectively disables analytics persistence. Set a real REDIS_URL.'
+        );
+    }
+
+    if (INSECURE_JWT_SECRETS.has(env.JWT_SECRET)) {
+        throw new Error(
+            '❌ [FATAL] JWT_SECRET is a known placeholder. Generate a strong random secret for production.'
+        );
+    }
+
+    if (INSECURE_SALTS.has(env.IP_HASH_SALT)) {
+        throw new Error(
+            '❌ [FATAL] IP_HASH_SALT is a placeholder. Set a unique random salt for production.'
+        );
+    }
+
+    if (env.DATABASE_URL.includes('localhost') || env.DATABASE_URL.includes('127.0.0.1')) {
+        throw new Error(
+            '❌ [FATAL] Production environment detected with local DATABASE_URL. Set a managed PostgreSQL URL.'
         );
     }
 }

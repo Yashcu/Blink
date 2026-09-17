@@ -28,12 +28,12 @@ export function createApp() {
         referrerPolicy: { policy: 'same-origin' },
         contentSecurityPolicy: {
             directives: {
-                defaultSrc: ["'self'"],
-                scriptSrc: ["'self'"],
-                styleSrc: ["'self'"],
-                imgSrc: ["'self'"],
-                fontSrc: ["'self'"],
-                connectSrc: ["'self'"],
+                defaultSrc: ['\'self\''],
+                scriptSrc: ['\'self\''],
+                styleSrc: ['\'self\''],
+                imgSrc: ['\'self\''],
+                fontSrc: ['\'self\''],
+                connectSrc: ['\'self\''],
             },
         },
     }));

@@ -5,7 +5,7 @@
     "scripts": {
         "start": "node dist/server.js",
         "dev": "tsx watch src/server.ts",
-        "worker": "ts-node src/analytics/analytics.worker.ts",
+        "worker": "node dist/analytics/analytics.worker.js",
         "build": "tsc",
         "lint": "eslint .",
         "lint:fix": "eslint . --fix",
