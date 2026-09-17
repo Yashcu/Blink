@@ -20,11 +20,12 @@ export class AnalyticsService {
 
         return {
             ...stats,
-            details: {
+            url: {
                 shortCode: url.shortCode,
+                customAlias: url.customAlias ?? null,
                 longUrl: url.longUrl,
-                expiresAt: url.expiresAt
-            }
+                expiresAt: url.expiresAt ?? null,
+            },
         };
     }
 }
