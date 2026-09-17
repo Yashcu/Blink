@@ -1,11 +1,7 @@
 import { create } from "zustand";
-import { me, logout as apiLogout } from "@/api/auth.api";
+import { me, logout as apiLogout, type User } from "@/api/auth.api";
 
-export type User = {
-    id: string;
-    email: string;
-    createdAt: string;
-};
+export type { User };
 
 type AuthState = {
     user: User | null;
@@ -24,6 +20,7 @@ export const useAuthStore = create<AuthState>((set) => ({
             const user = await me();
             set({ user, loading: false });
         } catch (err: any) {
+            localStorage.removeItem("auth_token");
             set({ user: null, loading: false });
         }
     },
@@ -32,6 +29,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         try {
             await apiLogout();
         } finally {
+            localStorage.removeItem("auth_token");
             set({ user: null });
             window.location.href = "/login";
         }

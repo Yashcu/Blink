@@ -10,7 +10,7 @@ export const verifyRequestSource = (req: Request, _res: Response, next: NextFunc
     if (safeMethods.includes(req.method)) return next();
 
     // Check for a custom header that browsers don't send by default
-    const requestHeader = req.headers['x-requested-with'];
+    const requestHeader = req.headers['x-requested-with'] || req.headers['authorization'];
     if (!requestHeader) {
         throw new AppError('Security check failed: Missing request header', 403);
     }

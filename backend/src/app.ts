@@ -39,14 +39,22 @@ export function createApp() {
     }));
     app.use(compression());
     app.use(hpp());
+    const allowedOrigins = (env.CORS_ORIGIN || '')
+        .split(',')
+        .map((o) => o.trim().replace(/\/$/, ''))
+        .filter(Boolean);
+
     app.use(cors({
         origin: (origin, callback) => {
             if (!origin) return callback(null, true);
-            const allowed = [env.CORS_ORIGIN];
-            if (allowed.includes(origin)) {
+            const normalized = origin.replace(/\/$/, '');
+            if (allowedOrigins.includes(normalized) || allowedOrigins.includes('*')) {
                 return callback(null, true);
             }
-            callback(new Error('Not allowed by CORS'));
+            if (!env.isProduction || normalized.endsWith('.vercel.app')) {
+                return callback(null, true);
+            }
+            callback(new Error(`Origin ${origin} not allowed by CORS`));
         },
         credentials: true,
     }));

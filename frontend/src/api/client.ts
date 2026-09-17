@@ -11,6 +11,14 @@ export const api = axios.create({
     },
 });
 
+api.interceptors.request.use((config) => {
+    const token = localStorage.getItem("auth_token");
+    if (token && config.headers) {
+        config.headers.set("Authorization", `Bearer ${token}`);
+    }
+    return config;
+});
+
 api.interceptors.response.use(
     (response) => response.data,
     (error) => {
@@ -18,6 +26,7 @@ api.interceptors.response.use(
         const backendError = error.response?.data;
 
         if (status === 401) {
+            localStorage.removeItem("auth_token");
             if (!window.location.pathname.startsWith("/login") &&
                 !window.location.pathname.startsWith("/register")) {
                 window.location.href = "/login";
@@ -25,7 +34,7 @@ api.interceptors.response.use(
         }
 
         if (status === 429) {
-            toast.error("Too many requests. Please slow down.");
+            toast.error(backendError?.error || "Too many requests. Please slow down.");
         }
 
         const message = backendError?.error || error.message || "An unexpected error occurred";

@@ -3,7 +3,7 @@ import { AuthRepository } from '../repositories/auth.repository';
 import { hashPassword, verifyPassword } from '../shared/password';
 import { signJwt } from '../shared/jwt';
 import { authConfig } from '../config/auth';
-import { AuthError } from '../shared/errors';
+import { AppError, AuthError } from '../shared/errors';
 import { redisCache } from '../infra/redis.cache';
 import { logger } from '../shared/logger';
 
@@ -24,12 +24,15 @@ export class AuthService {
             await this.repo.createUserAndSession(userId, email, passwordHash, sessionId, expiresAt);
         } catch (err) {
             logger.error({ err, email }, 'Registration failed');
+            if (err instanceof AppError) {
+                throw err;
+            }
             throw new AuthError('Registration could not be completed at this time.');
         }
 
         const token = signJwt({ userId, sessionId }, { expiresIn: authConfig.jwtExpiresInSeconds });
 
-        return { token };
+        return { token, userId };
     }
 
     async login(email: string, password: string) {
@@ -57,7 +60,11 @@ export class AuthService {
             { userId: user.id, sessionId },
             { expiresIn: authConfig.jwtExpiresInSeconds },
         );
-        return { token };
+        return { token, user: { id: user.id, email: user.email } };
+    }
+
+    async getUserById(id: string) {
+        return this.repo.findUserById(id);
     }
 
     async logout(sessionId: string) {

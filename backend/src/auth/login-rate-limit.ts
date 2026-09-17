@@ -1,6 +1,7 @@
 import { rateLimiter } from '../rate-limit/rate-limiter';
 import { AppError } from '../shared/errors';
 import { logger } from '../shared/logger';
+import { redisClient } from '../infra/redis.client';
 
 const MAX_IP_ATTEMPTS = 10;
 const MAX_EMAIL_ATTEMPTS = 5;
@@ -18,5 +19,16 @@ export async function checkLoginRateLimit(ip: string, email: string) {
             `Too many login attempts. Please try again in ${Math.ceil(retry)} seconds.`,
             429,
         );
+    }
+}
+
+export async function resetLoginRateLimit(ip: string, email: string) {
+    try {
+        await Promise.allSettled([
+            redisClient.del(`rate:login:ip:${ip}`),
+            redisClient.del(`rate:login:email:${email}`),
+        ]);
+    } catch (err) {
+        logger.warn({ err }, 'Failed to reset login rate limit in Redis');
     }
 }

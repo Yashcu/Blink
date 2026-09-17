@@ -39,7 +39,10 @@ export default function Login() {
 
     const onSubmit = async (data: LoginForm) => {
         try {
-            await login(data.email, data.password);
+            const res = await login(data.email, data.password);
+            if (res?.token) {
+                localStorage.setItem("auth_token", res.token);
+            }
             await loadUser();
             navigate("/dashboard");
         } catch (err: any) {
