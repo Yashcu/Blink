@@ -1,4 +1,4 @@
-import { redisClient } from "../infra/redis.client";
+import { redisClient } from '../infra/redis.client';
 
 export const rateLimiter = async (ip: string, limit: number, windowSeconds: number) => {
     const key = `rate:${ip}`;
@@ -19,4 +19,4 @@ export const rateLimiter = async (ip: string, limit: number, windowSeconds: numb
     }
 
     return { success: true };
-}
+};
