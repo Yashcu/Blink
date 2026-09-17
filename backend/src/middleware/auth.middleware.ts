@@ -4,6 +4,7 @@ import { AuthRepository } from '../repositories/auth.repository';
 import { AuthError } from '../shared/errors';
 import { redisCache } from '../infra/redis.cache';
 import { LRUCache } from 'lru-cache';
+import { getCookieOptions } from '../config/auth';
 
 export interface AuthenticatedRequest extends Request {
     user?: {
@@ -21,7 +22,14 @@ const sessionL1Cache = new LRUCache<string, boolean>({
 
 export const requireAuth = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     const authReq = req as AuthenticatedRequest;
-    const token = req.cookies?.auth;
+    let token = req.cookies?.auth;
+
+    if (!token && req.headers.authorization) {
+        const parts = req.headers.authorization.split(' ');
+        if (parts.length === 2 && parts[0].toLowerCase() === 'bearer') {
+            token = parts[1];
+        }
+    }
 
     if (!token) {
         return next(new AuthError('No authentication token provided'));
@@ -74,7 +82,7 @@ export const requireAuth = async (req: Request, res: Response, next: NextFunctio
 
         next();
     } catch (err) {
-        res.clearCookie('auth');
+        res.clearCookie('auth', getCookieOptions());
         if (err instanceof Error && err.name === 'TokenExpiredError') {
             next(new AuthError('Token expired'));
         } else {

@@ -39,7 +39,10 @@ export default function Register() {
 
     const onSubmit = async (data: RegisterForm) => {
         try {
-            await apiRegister(data.email, data.password);
+            const res = await apiRegister(data.email, data.password);
+            if (res?.token) {
+                localStorage.setItem("auth_token", res.token);
+            }
             await loadUser();
             navigate("/dashboard");
         } catch (err: any) {

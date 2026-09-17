@@ -64,6 +64,15 @@ export class AuthRepository {
         return row ? (row as UserRow) : null;
     }
 
+    async findUserById(id: string): Promise<UserRow | null> {
+        const result = await pool.query(
+            'SELECT id, email, password_hash FROM users WHERE id = $1',
+            [id],
+        );
+        const row = result.rows[0];
+        return row ? (row as UserRow) : null;
+    }
+
     async createSession(sessionId: string, userId: string, expiresAt: Date): Promise<void> {
         await pool.query(
             `INSERT INTO auth_sessions (id, user_id, expires_at)
