@@ -18,8 +18,9 @@ export function registerAuthRoutes(app: Express) {
         async (req: Request, res: Response, next: NextFunction) => {
             try {
                 const { email, password } = req.body as z.infer<typeof registerSchema>;
+                const fingerprint = req.headers['x-session-fingerprint'] as string | undefined;
 
-                const { token, userId } = await service.register(email, password);
+                const { token, userId } = await service.register(email, password, fingerprint, req);
 
                 res.cookie('auth', token, getCookieOptions())
                     .status(201)
@@ -47,10 +48,11 @@ export function registerAuthRoutes(app: Express) {
                     : Array.isArray(rawIp)
                         ? rawIp[0]
                         : (req.ip || '127.0.0.1');
+                const fingerprint = req.headers['x-session-fingerprint'] as string | undefined;
 
                 await checkLoginRateLimit(ip, email);
 
-                const { token, user } = await service.login(email, password);
+                const { token, user } = await service.login(email, password, fingerprint, req);
 
                 await resetLoginRateLimit(ip, email);
 
@@ -99,7 +101,7 @@ export function registerAuthRoutes(app: Express) {
         async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
             try {
                 const sessionId = req.user!.sessionId;
-                await service.logout(sessionId);
+                await service.logout(sessionId, req);
 
                 res.clearCookie('auth', getCookieOptions())
                     .status(200)

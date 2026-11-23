@@ -4,7 +4,6 @@ import { env } from './config/env';
 import { pool } from './infra/database';
 import { redisClient } from './infra/redis.client';
 import { closeAnalyticsWorker } from './analytics/analytics.worker';
-import './analytics/queue.monitor';
 import './url/url.listeners';
 import { logger } from './shared/logger';
 

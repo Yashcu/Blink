@@ -3,8 +3,16 @@ import { z } from 'zod';
 import { rateLimiter } from '../rate-limit/rate-limiter';
 import { errorResponse } from '../shared/response';
 
+/**
+ * Middleware factory for Zod schema validation.
+ * Parses and validates request body against schema.
+ * Returns 400 with first error message on validation failure.
+ *
+ * @param schema - Zod schema to validate against
+ * @returns Express middleware
+ */
 export function validateBody<T>(schema: z.ZodType<T>) {
-    return async (req: Request, res: Response, next: NextFunction) => {
+    return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         try {
             req.body = schema.parse(req.body);
             next();
@@ -18,8 +26,14 @@ export function validateBody<T>(schema: z.ZodType<T>) {
     };
 }
 
+/**
+ * Registration rate limiting middleware (100 req/min/IP).
+ * Applied before validation to prevent abuse.
+ *
+ * @returns Express middleware
+ */
 export function rateLimitRegister() {
-    return async (req: Request, res: Response, next: NextFunction) => {
+    return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
         const ip = req.ip || '';
         const limitResult = await rateLimiter(ip, 100, 60);
         if (!limitResult.success) {

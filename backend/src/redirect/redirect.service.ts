@@ -2,9 +2,36 @@ import { redisCache } from '../infra/redis.cache';
 import { RedirectRepository } from '../repositories/redirect.repository';
 import { cacheHits, cacheMisses } from '../metrics/metrics';
 
+interface CachedUrl {
+    longUrl: string;
+    expiresAt: string | null;
+}
+
+interface DbUrlRow {
+    long_url: string;
+    expiry_at: Date | null;
+}
+
+const MISS_TTL_SECONDS = 300;
+const DEFAULT_TTL_SECONDS = 86400;
+const MAX_TTL_SECONDS = 86400 * 7;
+const MIN_TTL_SECONDS = 60;
+
+/**
+ * Redirect service optimized for high-throughput URL resolution.
+ * Multi-layer caching: alias cache → short code cache → database → negative cache.
+ * All cache operations are fail-open (never block redirect on cache errors).
+ */
 export class RedirectService {
     private repo = new RedirectRepository();
 
+    /**
+     * Resolves a short code to its long URL.
+     * Cache hierarchy: alias cache → short code cache → database → negative cache.
+     *
+     * @param code - Short code or custom alias (trimmed)
+     * @returns Long URL string or null if not found/expired
+     */
     async resolve(code: string): Promise<string | null> {
         code = code.trim();
         const now = Date.now();
@@ -12,11 +39,9 @@ export class RedirectService {
         // Negative caching check (Fail-Open)
         try {
             if (await redisCache.get(`miss:${code}`)) return null;
-        }
-        catch {
+        } catch {
             // fail-open: cache is best-effort
         }
-
 
         // 1. Try custom alias cache (Fail-Open)
         let aliasCache: string | null = null;
@@ -28,18 +53,10 @@ export class RedirectService {
 
         if (aliasCache) {
             try {
-                const parsed = JSON.parse(aliasCache) as {
-                    longUrl: string;
-                    expiresAt?: string | null;
-                };
-                if (parsed?.longUrl) {
-                    // Check expiry
-                    if (parsed.expiresAt && new Date(parsed.expiresAt).getTime() <= now) {
-                        // Expired -> treat as miss
-                    } else {
-                        cacheHits.inc({ type: 'alias' });
-                        return parsed.longUrl;
-                    }
+                const parsed = JSON.parse(aliasCache) as CachedUrl;
+                if (parsed?.longUrl && !this.isExpired(parsed.expiresAt, now)) {
+                    cacheHits.inc({ type: 'alias' });
+                    return parsed.longUrl;
                 }
             } catch {
                 // corrupt/invalid JSON → treat as miss (silent)
@@ -56,18 +73,10 @@ export class RedirectService {
 
         if (shortCache) {
             try {
-                const parsed = JSON.parse(shortCache) as {
-                    longUrl: string;
-                    expiresAt?: string | null;
-                };
-                if (parsed?.longUrl) {
-                    // Check expiry
-                    if (parsed.expiresAt && new Date(parsed.expiresAt).getTime() <= now) {
-                        // Expired -> treat as miss
-                    } else {
-                        cacheHits.inc({ type: 'short' });
-                        return parsed.longUrl;
-                    }
+                const parsed = JSON.parse(shortCache) as CachedUrl;
+                if (parsed?.longUrl && !this.isExpired(parsed.expiresAt, now)) {
+                    cacheHits.inc({ type: 'short' });
+                    return parsed.longUrl;
                 }
             } catch {
                 // corrupt → miss
@@ -90,9 +99,9 @@ export class RedirectService {
             return shortRow.long_url;
         }
 
-        // Negative caching (30s TTL)
+        // Negative caching (5 min TTL)
         try {
-            await redisCache.set(`miss:${code}`, '1', { ex: 300 });
+            await redisCache.set(`miss:${code}`, '1', { ex: MISS_TTL_SECONDS });
         } catch {
             // fail-open: cache is best-effort
         }
@@ -100,13 +109,20 @@ export class RedirectService {
         return null;
     }
 
-    private async warmCache(key: string, row: { long_url: string; expiry_at: Date | null }) {
+    private isExpired(expiresAt: string | null, now: number): boolean {
+        if (!expiresAt) return false;
+        return new Date(expiresAt).getTime() <= now;
+    }
+
+    private async warmCache(key: string, row: DbUrlRow): Promise<void> {
         const ttlSeconds = row.expiry_at
             ? Math.max(
                 Math.floor((new Date(row.expiry_at).getTime() - Date.now()) / 1000),
-                60, // minimum 1 minute to avoid near-zero TTL spam
+                MIN_TTL_SECONDS,
             )
-            : 86400; // 24h default
+            : DEFAULT_TTL_SECONDS;
+
+        const cappedTtl = Math.min(ttlSeconds, MAX_TTL_SECONDS);
 
         // Safe set – never throws
         await redisCache.set(
@@ -115,7 +131,7 @@ export class RedirectService {
                 longUrl: row.long_url,
                 expiresAt: row.expiry_at?.toISOString() ?? null,
             },
-            { ex: Math.min(ttlSeconds, 86400 * 7) }, // cap at 7 days
+            { ex: cappedTtl },
         );
     }
 }

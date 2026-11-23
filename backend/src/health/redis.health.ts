@@ -18,10 +18,18 @@ export const redisCircuitOpen = new Gauge({
     help: '1 if Redis circuit breaker is open (failing fast)',
 });
 
-export async function checkRedis(): Promise<{
+export interface RedisHealthResult {
     healthy: boolean;
     details: string;
-}> {
+}
+
+/**
+ * Checks Redis connectivity and circuit breaker status.
+ * Updates Prometheus metrics for monitoring.
+ *
+ * @returns Redis health status with details
+ */
+export async function checkRedis(): Promise<RedisHealthResult> {
     const isOpen = isRedisCircuitOpen();
 
     redisCircuitOpen.set(isOpen ? 1 : 0);

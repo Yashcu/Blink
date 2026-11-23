@@ -1,5 +1,6 @@
 import { eventBus, EVENTS } from '../shared/event-bus';
 import { redisCache } from '../infra/redis.cache';
+import { logger } from '../shared/logger';
 
 // --- Event Handlers ---
 
@@ -10,9 +11,9 @@ eventBus.on(EVENTS.URL.CREATED, async ({ shortCode, longUrl, customAlias }) => {
         if (customAlias) {
             await redisCache.set(`alias:${customAlias}`, { shortCode }, { ex: 86400 });
         }
-        // console.log(`[Cache] Warmed for ${shortCode}`);
+        logger.debug({ shortCode }, 'Cache warmed');
     } catch (err) {
-        console.error('[Cache] Warm failed', err);
+        logger.error({ err, shortCode }, 'Cache warm failed');
     }
 });
 
@@ -26,13 +27,13 @@ eventBus.on(EVENTS.URL.DELETED, async ({ shortCode, customAlias }) => {
 });
 
 // Helper
-async function invalidateUrlCache(shortCode: string, customAlias?: string | null) {
+async function invalidateUrlCache(shortCode: string, customAlias?: string | null): Promise<void> {
     try {
         const keys = [`short:${shortCode}`];
         if (customAlias) keys.push(`alias:${customAlias}`);
         await redisCache.del(keys);
-        // console.log(`[Cache] Invalidated ${shortCode}`);
+        logger.debug({ shortCode }, 'Cache invalidated');
     } catch (err) {
-        console.error('[Cache] Invalidation failed', err);
+        logger.error({ err, shortCode }, 'Cache invalidation failed');
     }
 }

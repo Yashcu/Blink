@@ -8,6 +8,13 @@ export interface JwtPayload {
     exp?: number;
 }
 
+/**
+ * Signs a JWT token with HS256 algorithm.
+ *
+ * @param payload - Token payload (userId, sessionId)
+ * @param options - Additional sign options (e.g., custom expiresIn)
+ * @returns Signed JWT string
+ */
 export function signJwt(
     payload: Omit<JwtPayload, 'iat' | 'exp'>,
     options?: jwt.SignOptions,
@@ -19,6 +26,14 @@ export function signJwt(
     });
 }
 
+/**
+ * Verifies and decodes a JWT token.
+ * Throws if token is invalid, expired, or malformed.
+ *
+ * @param token - JWT string to verify
+ * @returns Decoded JWT payload
+ * @throws JsonWebTokenError if verification fails
+ */
 export function verifyJwt(token: string): JwtPayload {
     return jwt.verify(token, authConfig.jwtSecret, {
         algorithms: ['HS256'],

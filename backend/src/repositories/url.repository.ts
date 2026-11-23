@@ -26,8 +26,9 @@ export class UrlRepository {
                     data.expiresAt ?? null,
                 ],
             );
-        } catch (err: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
-            if (err.code === '23505') {
+        } catch (err: unknown) {
+            const pgError = err as { code?: string };
+            if (pgError.code === '23505') {
                 throw new ConflictError('Alias already in use');
             }
             throw err;

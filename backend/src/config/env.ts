@@ -72,4 +72,19 @@ if (env.isProduction) {
             '❌ [FATAL] Production environment detected with local DATABASE_URL. Set a managed PostgreSQL URL.'
         );
     }
+
+    // CORS must be explicitly configured in production
+    const corsOrigins = env.CORS_ORIGIN.split(',').map(o => o.trim().replace(/\/$/, '')).filter(Boolean);
+    if (corsOrigins.includes('*') || corsOrigins.length === 0) {
+        throw new Error(
+            '❌ [FATAL] CORS_ORIGIN must be explicitly configured in production. Wildcard (*) is not allowed.'
+        );
+    }
+
+    // Ensure cookie domain is set for production
+    if (!env.COOKIE_DOMAIN) {
+        throw new Error(
+            '❌ [FATAL] COOKIE_DOMAIN must be set in production for secure cookie scoping.'
+        );
+    }
 }

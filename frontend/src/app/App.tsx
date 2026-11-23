@@ -8,13 +8,12 @@ export default function App() {
 
   useEffect(() => {
     loadUser();
-    document.documentElement.classList.add("dark");
   }, [loadUser]);
 
   return (
     <div className="min-h-screen bg-background text-foreground">
       <AppRouter />
-      <Toaster position="bottom-right" theme="dark" richColors />{" "}
+      <Toaster position="bottom-right" theme="dark" richColors />
     </div>
   );
 }

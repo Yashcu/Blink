@@ -11,6 +11,7 @@ export interface SessionRow {
     id: string;
     user_id: string;
     expires_at: Date;
+    fingerprint: string | null;
 }
 
 export class AuthRepository {
@@ -23,6 +24,7 @@ export class AuthRepository {
         passwordHash: string,
         sessionId: string,
         expiresAt: Date,
+        fingerprint?: string,
     ): Promise<void> {
         const client = await pool.connect();
 
@@ -36,16 +38,17 @@ export class AuthRepository {
             );
 
             await client.query(
-                `INSERT INTO auth_sessions (id, user_id, expires_at)
-         VALUES ($1, $2, $3)`,
-                [sessionId, userId, expiresAt],
+                `INSERT INTO auth_sessions (id, user_id, expires_at, fingerprint)
+         VALUES ($1, $2, $3, $4)`,
+                [sessionId, userId, expiresAt, fingerprint ?? null],
             );
 
             await client.query('COMMIT');
-        } catch (err: any) { // eslint-disable-line @typescript-eslint/no-explicit-any
+        } catch (err: unknown) {
             await client.query('ROLLBACK');
 
-            if (err.code === '23505') {
+            const pgError = err as { code?: string };
+            if (pgError.code === '23505') {
                 throw new ConflictError('This email is already registered');
             }
 
@@ -73,17 +76,17 @@ export class AuthRepository {
         return row ? (row as UserRow) : null;
     }
 
-    async createSession(sessionId: string, userId: string, expiresAt: Date): Promise<void> {
+    async createSession(sessionId: string, userId: string, expiresAt: Date, fingerprint?: string): Promise<void> {
         await pool.query(
-            `INSERT INTO auth_sessions (id, user_id, expires_at)
-       VALUES ($1, $2, $3)`,
-            [sessionId, userId, expiresAt],
+            `INSERT INTO auth_sessions (id, user_id, expires_at, fingerprint)
+       VALUES ($1, $2, $3, $4)`,
+            [sessionId, userId, expiresAt, fingerprint ?? null],
         );
     }
 
     async findSessionById(sessionId: string): Promise<SessionRow | null> {
         const result = await pool.query(
-            `SELECT id, user_id, expires_at
+            `SELECT id, user_id, expires_at, fingerprint
        FROM auth_sessions
        WHERE id = $1 AND expires_at > NOW()`,
             [sessionId],

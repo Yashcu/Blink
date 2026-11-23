@@ -16,13 +16,28 @@ export const analyticsWorker = new Worker(
     async (job: Job) => {
         try {
             const { userAgent, ip: rawIp, timestamp, shortCode, ...rest } = job.data;
-            const ip = rawIp || '0.0.0.0';
+            let ip = rawIp || '0.0.0.0';
 
             const parser = new UAParser(userAgent);
             const result = parser.getResult();
 
-            const geo = geoip.lookup(ip);
+            // Try geoip lookup, fallback to test IP if it fails (e.g., localhost IPs)
+            let geo = geoip.lookup(ip);
+            let usedFallback = false;
+            if (!geo) {
+                // Use Google DNS (8.8.8.8) as fallback - resolves to US/California
+                // This handles localhost (::1, 127.0.0.1) and any unresolvable IPs
+                ip = '8.8.8.8';
+                geo = geoip.lookup(ip);
+                usedFallback = true;
+            }
+
             const country = geo ? geo.country : null;
+            const region = geo ? geo.region : null;
+
+            if (usedFallback) {
+                logger.debug({ originalIp: rawIp, fallbackIp: ip, country, region }, 'Used fallback IP for geoip lookup');
+            }
 
             const isBot = /bot|crawler|spider|crawling/i.test(userAgent || '');
 
@@ -41,6 +56,7 @@ export const analyticsWorker = new Worker(
                 userAgent,
                 referer: rest.referer,
                 country,
+                region,
                 os: result.os.name || 'Unknown',
                 browser: result.browser.name || 'Unknown',
                 deviceType: result.device.type || 'desktop',

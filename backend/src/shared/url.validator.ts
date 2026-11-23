@@ -1,7 +1,17 @@
 import { ValidationError } from './errors';
 
 const MAX_URL_LENGTH = 2048;
+const PRIVATE_IP_REGEX = /^172\.(1[6-9]|2[0-9]|3[0-1])\./;
+const LOCALHOST_HOSTNAMES = new Set(['localhost', '127.0.0.1', '::1']);
 
+/**
+ * Validates and sanitizes a URL for shortening.
+ * Prevents SSRF by blocking localhost, private IPs, and non-HTTP(S) protocols.
+ *
+ * @param raw - Raw URL string from user input
+ * @returns Parsed URL object (validated)
+ * @throws ValidationError if URL is invalid, too long, or targets restricted hosts
+ */
 export function validateUrl(raw: string): URL {
     if (!raw) {
         throw new ValidationError('longUrl required');
@@ -23,14 +33,13 @@ export function validateUrl(raw: string): URL {
     }
 
     const { hostname } = parsed;
-    if (
-        hostname === 'localhost' ||
-        hostname === '127.0.0.1' ||
-        hostname === '::1' ||
+    const isLocalhost = LOCALHOST_HOSTNAMES.has(hostname);
+    const isPrivateIP =
         hostname.startsWith('10.') ||
         hostname.startsWith('192.168.') ||
-        /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(hostname)
-    ) {
+        PRIVATE_IP_REGEX.test(hostname);
+
+    if (isLocalhost || isPrivateIP) {
         throw new ValidationError('Restricted URL');
     }
 

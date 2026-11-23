@@ -7,7 +7,6 @@ import { Layout } from "../components/Layout";
 const Login = lazy(() => import("@/pages/Login"));
 const Register = lazy(() => import("@/pages/Register"));
 const Dashboard = lazy(() => import("@/pages/Dashboard"));
-const CreateUrl = lazy(() => import("@/pages/CreateUrl"));
 const EditUrl = lazy(() => import("@/pages/EditUrl"));
 const Analytics = lazy(() => import("@/pages/Analytics"));
 
@@ -45,16 +44,6 @@ export function AppRouter() {
                         <ProtectedRoute>
                             <Layout>
                                 <Dashboard />
-                            </Layout>
-                        </ProtectedRoute>
-                    }
-                />
-                <Route
-                    path="/urls/new"
-                    element={
-                        <ProtectedRoute>
-                            <Layout>
-                                <CreateUrl />
                             </Layout>
                         </ProtectedRoute>
                     }
