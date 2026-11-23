@@ -5,6 +5,7 @@ import { toast } from "sonner";
 export const api = axios.create({
     baseURL: BACKEND_URL,
     withCredentials: true,
+    timeout: 10000,
     headers: {
         "Content-Type": "application/json",
         "X-Requested-With": "XMLHttpRequest",
